@@ -8,10 +8,18 @@ import 'app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Инициализируем БД
-  await IsarService.init();
+  // Глобальный обработчик — не даём упасть из-за навигации
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final error = details.exception.toString();
+    // Игнорируем ошибку стека go_router
+    if (error.contains('currentConfiguration.isNotEmpty') ||
+        error.contains('pages left to show')) {
+      return;
+    }
+    FlutterError.presentError(details);
+  };
 
-  // 2. Сид стартовых наград (только при первом запуске)
+  await IsarService.init();
   await RewardRepository().seedDefaultRewards();
 
   runApp(
