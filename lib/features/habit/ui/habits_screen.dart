@@ -16,15 +16,31 @@ import '../../task/ui/widgets/add_task_sheet.dart';
 import 'widgets/habit_card.dart';
 import 'widgets/add_habit_sheet.dart';
 
-class HabitsScreen extends StatelessWidget {
+class HabitsScreen extends StatefulWidget {
   const HabitsScreen({super.key});
 
-  void _showPoints(
-    BuildContext context,
-    int points, {
-    int streak = 0,
-    bool isBonus = false,
-  }) {
+  @override
+  State<HabitsScreen> createState() => _HabitsScreenState();
+}
+
+class _HabitsScreenState extends State<HabitsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _showPoints(BuildContext context, int points,
+      {int streak = 0, bool isBonus = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -39,16 +55,16 @@ class HabitsScreen extends StatelessWidget {
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF0047AB), // кобальт вместо бирюзового
+        backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 2),
       ),
     );
   }
 
-  void _showAddHabit(BuildContext context) {
+  void _showAddHabit() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -62,7 +78,7 @@ class HabitsScreen extends StatelessWidget {
     );
   }
 
-  void _showAddTask(BuildContext context) {
+  void _showAddTask() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -78,135 +94,127 @@ class HabitsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0047AB), // кобальт вместо бирюзового
-        body: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            // Шапка в стиле скриншота
-            SliverAppBar(
-              pinned: true,
-              backgroundColor: const Color(0xFF0047AB), // кобальт вместо бирюзового
-              foregroundColor: Colors.white,
-              expandedHeight: 0,
-              title: const Text(
-                'My Habits',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0A0F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0047AB),
+        foregroundColor: Colors.white,
+        title: const Text(
+          'My Habits',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (_tabController.index == 0) {
+                _showAddHabit();
+              } else {
+                _showAddTask();
+              }
+            },
+            child: const Text(
+              'Add',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
-              centerTitle: true,
-              actions: [
-                Builder(
-                  builder: (ctx) => TextButton(
-                    onPressed: () {
-                      final tabIndex =
-                          DefaultTabController.of(ctx).index;
-                      if (tabIndex == 0) {
-                        _showAddHabit(context);
-                      } else {
-                        _showAddTask(context);
-                      }
-                    },
-                    child: const Text(
-                      'Add',
+            ),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(80),
+          child: Column(
+            children: [
+              // ALL HABITS + процент
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'ALL HABITS',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
+                        color: Colors.white70,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
                       ),
                     ),
-                  ),
-                ),
-              ],
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(80),
-                child: Column(
-                  children: [
-                    // Строка ALL HABITS + процент
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'ALL HABITS',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          BlocBuilder<HabitBloc, HabitState>(
-                            builder: (context, state) {
-                              List<Habit> habits = [];
-                              if (state is HabitLoaded) {
-                                habits = state.habits;
-                              }
-                              if (state is HabitCompleted) {
-                                habits = state.habits;
-                              }
-                              if (habits.isEmpty) {
-                                return const Text(
-                                  '0%',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                );
-                              }
-                              final done = habits
-                                  .where((h) => h.isCompletedToday)
-                                  .length;
-                              final percent =
-                                  ((done / habits.length) * 100)
-                                      .round();
-                              return Text(
-                                '$percent%',
-                                style: const TextStyle(
+                    BlocBuilder<HabitBloc, HabitState>(
+                      builder: (context, state) {
+                        List<Habit> habits = [];
+                        if (state is HabitLoaded) habits = state.habits;
+                        if (state is HabitCompleted) habits = state.habits;
+                        if (habits.isEmpty) {
+                          return const Text('0%',
+                              style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            },
+                                  fontWeight: FontWeight.bold));
+                        }
+                        final done =
+                            habits.where((h) => h.isCompletedToday).length;
+                        final percent =
+                            ((done / habits.length) * 100).round();
+                        return Text(
+                          '$percent%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-                      ),
-                    ),
-                    // TabBar
-                    const TabBar(
-                      indicatorColor: Colors.white,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white60,
-                      tabs: [
-                        Tab(text: 'Привычки'),
-                        Tab(text: 'Задачи'),
-                      ],
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
-            ),
-
-            // Виджет баллов
-            SliverToBoxAdapter(
-              child: const PointsHeader(),
-            ),
-          ],
-          body: TabBarView(
-            children: [
-              _HabitsTab(onPointsEarned: _showPoints),
-              _TasksTab(onPointsEarned: _showPoints),
+              // TabBar
+              TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.white,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white60,
+                tabs: const [
+                  Tab(text: 'Привычки'),
+                  Tab(text: 'Задачи'),
+                ],
+              ),
             ],
           ),
         ),
+      ),
+      body: Column(
+        children: [
+          // Виджет баллов
+          const PointsHeader(),
+
+          // Контент вкладок
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _HabitsTab(
+                  onPointsEarned: (ctx, pts,
+                          {streak = 0, isBonus = false}) =>
+                      _showPoints(ctx, pts,
+                          streak: streak, isBonus: isBonus),
+                ),
+                _TasksTab(
+                  onPointsEarned: (ctx, pts,
+                          {streak = 0, isBonus = false}) =>
+                      _showPoints(ctx, pts),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -216,12 +224,8 @@ class HabitsScreen extends StatelessWidget {
 // Вкладка Привычки
 // ─────────────────────────────────────────
 class _HabitsTab extends StatelessWidget {
-  final void Function(
-    BuildContext,
-    int, {
-    int streak,
-    bool isBonus,
-  }) onPointsEarned;
+  final void Function(BuildContext, int, {int streak, bool isBonus})
+      onPointsEarned;
 
   const _HabitsTab({required this.onPointsEarned});
 
@@ -249,17 +253,15 @@ class _HabitsTab extends StatelessWidget {
         if (state is HabitCompleted) habits = state.habits;
 
         if (habits.isEmpty) {
-          return _EmptyState(
+          return const _EmptyState(
             emoji: '\u{1F331}',
             title: 'Нет привычек на сегодня',
             subtitle: 'Нажми Add чтобы добавить первую привычку',
           );
         }
 
-        // Невыполненные сначала
         final sorted = [...habits]
-          ..sort((a, b) =>
-              a.isCompletedToday ? 1 : -1);
+          ..sort((a, b) => a.isCompletedToday ? 1 : -1);
 
         return ListView.builder(
           padding: const EdgeInsets.only(top: 8, bottom: 80),
@@ -286,12 +288,8 @@ class _HabitsTab extends StatelessWidget {
 // Вкладка Задачи
 // ─────────────────────────────────────────
 class _TasksTab extends StatelessWidget {
-  final void Function(
-    BuildContext,
-    int, {
-    int streak,
-    bool isBonus,
-  }) onPointsEarned;
+  final void Function(BuildContext, int, {int streak, bool isBonus})
+      onPointsEarned;
 
   const _TasksTab({required this.onPointsEarned});
 
@@ -314,7 +312,7 @@ class _TasksTab extends StatelessWidget {
         if (state is TaskCompleted) tasks = state.tasks;
 
         if (tasks.isEmpty) {
-          return _EmptyState(
+          return const _EmptyState(
             emoji: '\u{2705}',
             title: 'Нет активных задач',
             subtitle: 'Нажми Add чтобы добавить задачу',
@@ -358,20 +356,23 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(emoji, style: const TextStyle(fontSize: 56)),
           const SizedBox(height: 16),
-          Text(title, style: theme.textTheme.titleMedium),
+          Text(title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: Colors.white)),
           const SizedBox(height: 8),
           Text(
             subtitle,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white38,
+                ),
             textAlign: TextAlign.center,
           ),
         ],
