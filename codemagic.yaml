@@ -1,18 +1,31 @@
 workflows:
-  ios-workflow:
-    name: iOS Workflow
+  ios-release:
+    name: iOS Release Build
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: "Your_App_Store_Connect_Integration_Name" # Название интеграции из настроек Codemagic
     environment:
-      flutter: stable
-      xcode: latest
+      groups:
+        - appstore_credentials # Группа переменных с вашими сертификатами
     scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
-      - name: Build unsigned IPA
+      # 1. Получение сертификатов и профилей от Apple
+      - name: Fetch iOS signing files
         script: |
-          flutter build ios --release --no-codesign
-          cd build/ios/iphoneos
-          mkdir -p Payload
-          cp -r Runner.app Payload/Runner.app
-          zip -r life_good.ipa Payload
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+      
+      # 2. Установка сертификатов в связку ключей (Keychain)
+      - name: Set up signing certificate
+        script: |
+          keychain initialize
+          app-store-connect create-build-provisioning-profile "$BUNDLE_ID" --type IOS_APP_STORE
+          xcode-project use-profiles
+          
+      # 3. Сборка самого IPA (пример для Flutter)
+      - name: Build Flutter IPA
+        script: |
+          flutter build ipa --release --export-options-plist=$HOME/export_options.plist
+          
+    # 4. Указываем Codemagic, какие файлы забрать как артефакты
     artifacts:
-      - build/ios/iphoneos/life_good.ipa
+      - build/ios/ipa/*.ipa
