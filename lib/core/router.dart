@@ -8,6 +8,7 @@ import '../features/profile/ui/profile_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
+  debugLogDiagnostics: false,
   routes: [
     ShellRoute(
       builder: (context, state, child) {
@@ -16,23 +17,33 @@ final appRouter = GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => const HabitsScreen(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: HabitsScreen(),
+          ),
         ),
         GoRoute(
           path: '/goals',
-          builder: (context, state) => const GoalsScreen(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: GoalsScreen(),
+          ),
         ),
         GoRoute(
           path: '/shop',
-          builder: (context, state) => const ShopScreen(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: ShopScreen(),
+          ),
         ),
         GoRoute(
           path: '/stats',
-          builder: (context, state) => const StatsScreen(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: StatsScreen(),
+          ),
         ),
         GoRoute(
           path: '/profile',
-          builder: (context, state) => const ProfileScreen(),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: ProfileScreen(),
+          ),
         ),
       ],
     ),
@@ -43,7 +54,8 @@ class _ScaffoldWithNavBar extends StatelessWidget {
   final Widget child;
   const _ScaffoldWithNavBar({required this.child});
 
-  int _locationToIndex(String location) {
+  int _locationToIndex(BuildContext context) {
+    final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/goals')) return 1;
     if (location.startsWith('/shop')) return 2;
     if (location.startsWith('/stats')) return 3;
@@ -51,38 +63,60 @@ class _ScaffoldWithNavBar extends StatelessWidget {
     return 0;
   }
 
+  void _onDestinationSelected(BuildContext context, int index) {
+    switch (index) {
+      case 0:
+        context.go('/');
+        break;
+      case 1:
+        context.go('/goals');
+        break;
+      case 2:
+        context.go('/shop');
+        break;
+      case 3:
+        context.go('/stats');
+        break;
+      case 4:
+        context.go('/profile');
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).matchedLocation;
     return Scaffold(
       body: child,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _locationToIndex(location),
-        onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go('/');
-              break;
-            case 1:
-              context.go('/goals');
-              break;
-            case 2:
-              context.go('/shop');
-              break;
-            case 3:
-              context.go('/stats');
-              break;
-            case 4:
-              context.go('/profile');
-              break;
-          }
-        },
+        selectedIndex: _locationToIndex(context),
+        onDestinationSelected: (index) =>
+            _onDestinationSelected(context, index),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.today_outlined), selectedIcon: Icon(Icons.today), label: 'Сегодня'),
-          NavigationDestination(icon: Icon(Icons.flag_outlined), selectedIcon: Icon(Icons.flag), label: 'Цели'),
-          NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Магазин'),
-          NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'Статистика'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Профиль'),
+          NavigationDestination(
+            icon: Icon(Icons.today_outlined),
+            selectedIcon: Icon(Icons.today),
+            label: 'Сегодня',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.flag_outlined),
+            selectedIcon: Icon(Icons.flag),
+            label: 'Цели',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront),
+            label: 'Магазин',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart),
+            label: 'Статистика',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Профиль',
+          ),
         ],
       ),
     );
