@@ -1,50 +1,49 @@
-name: iOS Build and Release
+name: Build unsigned iOS IPA
 
 on:
   push:
-    tags:
-      - 'v*' # Срабатывает только тогда, когда вы пушите тег версии (например, v1.0.1)
+    branches:
+      - main # Сборка будет запускаться при каждом пуше в ветку main. Если у вас ветка master, замените на master.
+  workflow_dispatch: # Позволяет запускать сборку вручную из интерфейса GitHub
 
 jobs:
   build:
+    name: Build IPA
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v3
+      # 1. Клонируем репозиторий
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Java
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'zulu'
-        java-version: '17'
+      # 2. Устанавливаем Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
 
-    - name: Set up Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.19.x' # Укажите вашу версию Flutter, если необходимо
-        channel: 'stable'
+      # 3. Подгружаем зависимости
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          
+      # 4. Собираем iOS проект без подписи (это создаст правильный Runner.app)
+      - name: Build iOS
+        run: |
+          flutter build ios --release --no-codesign
 
-    - name: Install dependencies
-      run: flutter pub get
+      # 5. Правильно упаковываем в Payload
+      - name: Create IPA payload
+        run: |
+          mkdir Payload
+          # Копируем созданный Runner.app в папку Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          # Архивируем в .ipa
+          zip -vr app.ipa Payload/
 
-    # Собираем iOS проект без подписи (для AltStore)
-    - name: Build iOS
-      run: flutter build ios --release --no-codesign
-
-    # Создаем правильную структуру папок и архивируем в .ipa
-    - name: Package IPA
-      run: |
-        cd build/ios/iphoneos
-        mkdir Payload
-        cd Payload
-        ln -s ../Runner.app
-        cd ..
-        zip -r app.ipa Payload
-
-    # Создаем релиз на GitHub и прикрепляем туда готовый app.ipa
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: build/ios/iphoneos/app.ipa
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 6. Загружаем готовый .ipa в артефакты GitHub
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-app-unsigned-ipa
+          path: app.ipa
