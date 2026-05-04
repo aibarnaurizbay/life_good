@@ -39,7 +39,7 @@ class HabitsScreen extends StatelessWidget {
             ),
           ],
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: const Color(0xFF0047AB), // кобальт вместо бирюзового
         behavior: SnackBarBehavior.floating,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -81,13 +81,13 @@ class HabitsScreen extends StatelessWidget {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F5F5),
+        backgroundColor: const Color(0xFF0047AB), // кобальт вместо бирюзового
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             // Шапка в стиле скриншота
             SliverAppBar(
               pinned: true,
-              backgroundColor: const Color(0xFF1A7A7A),
+              backgroundColor: const Color(0xFF0047AB), // кобальт вместо бирюзового
               foregroundColor: Colors.white,
               expandedHeight: 0,
               title: const Text(

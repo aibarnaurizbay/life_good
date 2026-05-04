@@ -15,13 +15,13 @@ class PointsHeader extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primary,
-            theme.colorScheme.secondary,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+  colors: [
+    const Color(0xFF0047AB), // кобальт
+    const Color(0xFF1A6BB5), // кобальт светлее
+  ],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(

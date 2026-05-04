@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/habit_model.dart';
 
-class HabitCard extends StatelessWidget {
+class HabitCard extends StatefulWidget {
   final Habit habit;
   final VoidCallback onComplete;
   final VoidCallback onDelete;
@@ -13,11 +13,17 @@ class HabitCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  // Последние 7 дней
+  @override
+  State<HabitCard> createState() => _HabitCardState();
+}
+
+class _HabitCardState extends State<HabitCard> {
+  // Локально отмеченные дни (помимо сегодняшнего из БД)
+  final Set<int> _markedDays = {};
+
   List<DateTime> _lastSevenDays() {
     final today = DateTime.now();
-    return List.generate(7, (i) =>
-        today.subtract(Duration(days: 6 - i)));
+    return List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
   }
 
   String _dayLabel(DateTime date) {
@@ -32,60 +38,136 @@ class HabitCard extends StatelessWidget {
         date.day == now.day;
   }
 
+  bool _isDayCompleted(DateTime date) {
+    if (_isToday(date)) return widget.habit.isCompletedToday;
+    return _markedDays.contains(date.day);
+  }
+
+  void _onDayTap(BuildContext context, DateTime date) {
+    // Прошлые дни — показываем диалог
+    if (!_isToday(date)) {
+      _showConfirmDialog(context, date);
+      return;
+    }
+    // Сегодня — стандартное выполнение
+    if (!widget.habit.isCompletedToday) {
+      widget.onComplete();
+    }
+  }
+
+  void _showConfirmDialog(BuildContext context, DateTime date) {
+    final alreadyMarked = _markedDays.contains(date.day);
+    if (alreadyMarked) return; // уже отмечен — не показываем
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            const Text('\u{1F4C5}', style: TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
+            Text(
+              '${date.day} ${_monthName(date.month)}',
+              style: const TextStyle(fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Привычка "${widget.habit.title}" выполнена?',
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.grey,
+              side: const BorderSide(color: Colors.grey),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Нет'),
+          ),
+          FilledButton(
+            onPressed: () {
+              setState(() => _markedDays.add(date.day));
+              Navigator.pop(context);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0047AB),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Да'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _monthName(int month) {
+    const names = [
+      'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+    ];
+    return names[month - 1];
+  }
+
+  int _overallPercent() {
+    if (widget.habit.longestStreak == 0) return 0;
+    final ratio =
+        widget.habit.currentStreak / widget.habit.longestStreak;
+    return (ratio * 100).round().clamp(0, 100);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDone = habit.isCompletedToday;
+    final isDone = widget.habit.isCompletedToday;
     final days = _lastSevenDays();
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-          width: 0.5,
-        ),
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Верхняя часть — название + меню
+          // Заголовок
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
             child: Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
-                    onTap: isDone ? null : onComplete,
-                    child: Text(
-                      habit.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: isDone
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface,
-                        decoration: isDone
-                            ? TextDecoration.none
-                            : null,
-                      ),
+                  child: Text(
+                    widget.habit.title,
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Display',
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert,
-                      color: theme.colorScheme.outline, size: 20),
+                  icon: const Icon(Icons.more_vert,
+                      color: Colors.white54, size: 20),
+                  color: const Color(0xFF2C2C2E),
                   onSelected: (v) {
-                    if (v == 'delete') onDelete();
-                    if (v == 'complete') onComplete();
+                    if (v == 'delete') widget.onDelete();
+                    if (v == 'complete' && !isDone) widget.onComplete();
                   },
                   itemBuilder: (_) => [
                     if (!isDone)
@@ -96,7 +178,8 @@ class HabitCard extends StatelessWidget {
                             Icon(Icons.check_circle_outline,
                                 color: Colors.green),
                             SizedBox(width: 8),
-                            Text('Выполнено'),
+                            Text('Выполнено',
+                                style: TextStyle(color: Colors.white)),
                           ],
                         ),
                       ),
@@ -106,7 +189,8 @@ class HabitCard extends StatelessWidget {
                         children: [
                           Icon(Icons.delete_outline, color: Colors.red),
                           SizedBox(width: 8),
-                          Text('Удалить'),
+                          Text('Удалить',
+                              style: TextStyle(color: Colors.white)),
                         ],
                       ),
                     ),
@@ -116,27 +200,41 @@ class HabitCard extends StatelessWidget {
             ),
           ),
 
-          // Подзаголовок — streak, overall, приватность
+          // Streak / Overall / баллы
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
             child: Row(
               children: [
-                _InfoChip(
-                  label:
-                      'Streak: +${habit.currentStreak}',
-                  color: habit.currentStreak > 0
-                      ? Colors.orange
-                      : theme.colorScheme.outline,
+                Text(
+                  'Streak: +${widget.habit.currentStreak}',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 13,
+                    color: widget.habit.currentStreak > 0
+                        ? Colors.orange
+                        : Colors.white38,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _InfoChip(
-                  label: 'Overall: ${_overallPercent()}%',
-                  color: theme.colorScheme.outline,
+                const SizedBox(width: 12),
+                Text(
+                  'Overall: ${_overallPercent()}%',
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 13,
+                    color: Colors.white54,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _InfoChip(
-                  label: '+${habit.pointsReward}\u{2B50}',
-                  color: theme.colorScheme.primary,
+                const SizedBox(width: 12),
+                Text(
+                  '+${widget.habit.pointsReward}\u{2B50}',
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 13,
+                    color: Color(0xFF4DA6FF),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -145,94 +243,80 @@ class HabitCard extends StatelessWidget {
           // Разделитель
           Divider(
             height: 1,
-            color: theme.colorScheme.outlineVariant,
+            color: Colors.white.withOpacity(0.08),
           ),
 
-          // Дни недели
+          // Дни недели — кликабельные
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 14),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: days.map((day) {
                 final isToday = _isToday(day);
-                final isCompleted = isToday && isDone;
+                final completed = _isDayCompleted(day);
 
-                return Column(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isCompleted
-                            ? theme.colorScheme.primary
-                            : isToday
-                                ? theme.colorScheme.primaryContainer
-                                : theme.colorScheme.surfaceContainerHighest,
-                      ),
-                      child: Center(
-                        child: isCompleted
-                            ? Icon(Icons.check,
-                                color: Colors.white, size: 18)
-                            : Text(
-                                _dayLabel(day),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: isToday
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: isToday
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurfaceVariant,
+                return GestureDetector(
+                  onTap: () => _onDayTap(context, day),
+                  child: Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: completed
+                              ? const Color(0xFF0047AB) // кобальт
+                              : isToday
+                                  ? const Color(0xFF0047AB).withOpacity(0.25)
+                                  : const Color(0xFF2C2C2E),
+                          border: isToday && !completed
+                              ? Border.all(
+                                  color: const Color(0xFF0047AB),
+                                  width: 1.5,
+                                )
+                              : null,
+                        ),
+                        child: Center(
+                          child: completed
+                              ? const Icon(Icons.check,
+                                  color: Colors.white, size: 18)
+                              : Text(
+                                  _dayLabel(day),
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    fontSize: 12,
+                                    fontWeight: isToday
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: isToday
+                                        ? const Color(0xFF4DA6FF)
+                                        : Colors.white38,
+                                  ),
                                 ),
-                              ),
-                      ),
-                    ),
-                    if (isToday)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'TODAY',
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
                         ),
                       ),
-                  ],
+                      if (isToday)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text(
+                            'TODAY',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0047AB),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 );
               }).toList(),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  int _overallPercent() {
-    // Считаем процент выполнения на основе streak
-    if (habit.longestStreak == 0) return 0;
-    final ratio = habit.currentStreak / habit.longestStreak;
-    return (ratio * 100).round().clamp(0, 100);
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _InfoChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(
-        fontSize: 12,
-        color: color,
-        fontWeight: FontWeight.w500,
       ),
     );
   }
