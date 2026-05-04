@@ -46,9 +46,6 @@ class TaskCard extends StatelessWidget {
                 width: 2,
               ),
             ),
-            child: const Center(
-              child: Icon(Icons.check, size: 16, color: Colors.transparent),
-            ),
           ),
         ),
         title: Text(task.title, style: theme.textTheme.bodyLarge),
@@ -56,7 +53,8 @@ class TaskCard extends StatelessWidget {
           spacing: 6,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: _priorityColor(context).withOpacity(0.15),
                 borderRadius: BorderRadius.circular(8),
@@ -81,7 +79,7 @@ class TaskCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  DateFormat('dd MMM', 'ru').format(task.deadline!),
+                  DateFormat('dd MMM').format(task.deadline!),
                   style: TextStyle(
                     fontSize: 11,
                     color: task.isOverdue ? Colors.red : null,
@@ -89,7 +87,8 @@ class TaskCard extends StatelessWidget {
                 ),
               ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
