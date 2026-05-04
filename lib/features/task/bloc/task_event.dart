@@ -14,6 +14,11 @@ class UpdateTaskEvent extends TaskEvent {
   UpdateTaskEvent(this.task);
 }
 
+class EditTaskEvent extends TaskEvent {
+  final Task task;
+  EditTaskEvent(this.task);
+}
+
 class CompleteTaskEvent extends TaskEvent {
   final int id;
   CompleteTaskEvent(this.id);

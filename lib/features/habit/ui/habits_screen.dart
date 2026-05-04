@@ -332,6 +332,9 @@ class _TasksTab extends StatelessWidget {
               onDelete: () => context
                   .read<TaskBloc>()
                   .add(DeleteTaskEvent(task.id)),
+              onEdit: (updatedTask) => context
+      .read<TaskBloc>()
+      .add(UpdateTaskEvent(updatedTask)),    
             );
           },
         );

@@ -43,7 +43,6 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
           16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
@@ -56,56 +55,122 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: theme.colorScheme.outline,
+                color: Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 16),
-          Text('Новая задача', style: theme.textTheme.titleLarge),
+          const Text(
+            'Новая задача',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 16),
           TextField(
             controller: _titleController,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Название',
-              hintText: 'Например: Купить продукты',
+            decoration: InputDecoration(
+              hintText: 'Название задачи',
+              hintStyle: TextStyle(color: Colors.grey.shade400),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                    color: Color(0xFF0047AB), width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
             ),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _priority,
-            decoration: const InputDecoration(labelText: 'Приоритет'),
-            items: const [
-              DropdownMenuItem(value: 1, child: Text('🟢 Низкий')),
-              DropdownMenuItem(value: 2, child: Text('🟡 Средний')),
-              DropdownMenuItem(value: 3, child: Text('🔴 Высокий')),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  value: _priority,
+                  decoration: InputDecoration(
+                    labelText: 'Приоритет',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 1, child: Text('\u{1F7E2} Низкий')),
+                    DropdownMenuItem(
+                        value: 2, child: Text('\u{1F7E1} Средний')),
+                    DropdownMenuItem(
+                        value: 3, child: Text('\u{1F534} Высокий')),
+                  ],
+                  onChanged: (v) => setState(() => _priority = v!),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _pickDate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today,
+                            size: 16, color: Colors.grey.shade500),
+                        const SizedBox(width: 6),
+                        Text(
+                          _deadline == null
+                              ? 'Дедлайн'
+                              : DateFormat('d MMM').format(_deadline!),
+                          style: TextStyle(
+                            color: _deadline == null
+                                ? Colors.grey.shade500
+                                : const Color(0xFF1C1C1E),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
-            onChanged: (v) => setState(() => _priority = v!),
           ),
-          const SizedBox(height: 12),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.calendar_today),
-            title: Text(
-              _deadline == null
-                  ? 'Дедлайн (необязательно)'
-                  : DateFormat('d MMMM yyyy').format(_deadline!),
-            ),
-            trailing: _deadline != null
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(() => _deadline = null),
-                  )
-                : null,
-            onTap: _pickDate,
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               onPressed: _submit,
-              child: const Text('Добавить задачу'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF0047AB),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Добавить задачу',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ],

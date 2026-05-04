@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../data/habit_model.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../bloc/habit_bloc.dart';
+import '../../bloc/habit_event.dart';
 
 class HabitCard extends StatefulWidget {
   final Habit habit;
@@ -19,7 +22,97 @@ class HabitCard extends StatefulWidget {
 
 class _HabitCardState extends State<HabitCard> {
   final Set<int> _markedDays = {};
+void _showEditHabitDialog(BuildContext context) {
+  final titleController =
+      TextEditingController(text: widget.habit.title);
+  int points = widget.habit.pointsReward;
 
+  showDialog(
+    context: context,
+    builder: (_) => StatefulBuilder(
+      builder: (ctx, setDialogState) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Редактировать привычку',
+          style: TextStyle(color: Colors.white, fontSize: 17),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Название',
+                labelStyle: const TextStyle(color: Colors.white54),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.white24),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                      color: Color(0xFF0047AB), width: 2),
+                ),
+                filled: true,
+                fillColor: const Color(0xFF2C2C2E),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('Баллов: ',
+                    style: TextStyle(color: Colors.white70)),
+                Expanded(
+                  child: Slider(
+                    value: points.toDouble(),
+                    min: 5,
+                    max: 50,
+                    divisions: 9,
+                    activeColor: const Color(0xFF0047AB),
+                    label: '$points',
+                    onChanged: (v) =>
+                        setDialogState(() => points = v.round()),
+                  ),
+                ),
+                Text('$points \u{2B50}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена',
+                style: TextStyle(color: Colors.white54)),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (titleController.text.trim().isEmpty) return;
+              widget.habit.title = titleController.text.trim();
+              widget.habit.pointsReward = points;
+              context
+                  .read<HabitBloc>()
+                  .add(UpdateHabitEvent(widget.habit));
+              Navigator.pop(ctx);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0047AB),
+            ),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   List<DateTime> _lastSevenDays() {
     final today = DateTime.now();
     return List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
@@ -202,12 +295,24 @@ class _HabitCardState extends State<HabitCard> {
                   color: const Color(0xFF2C2C2E),
                   onSelected: (v) {
                     if (v == 'delete') widget.onDelete();
+                    if (v == 'edit') _showEditHabitDialog(context);
                     if (v == 'complete' && !isDone) {
                       _showConfirmDialog(context, DateTime.now(),
                           isToday: true);
                     }
                   },
                   itemBuilder: (_) => [
+                   const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                  children: [
+                  Icon(Icons.edit_outlined, color: Colors.blue),
+                 SizedBox(width: 8),
+                 Text('Редактировать',
+                 style: TextStyle(color: Colors.white)),
+                         ],
+                     ),
+                  ),
                     if (!isDone)
                       const PopupMenuItem(
                         value: 'complete',
