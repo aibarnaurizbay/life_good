@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../data/habit_model.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/habit_bloc.dart';
 import '../../bloc/habit_event.dart';
+import '../../data/habit_model.dart';
 
 class HabitCard extends StatefulWidget {
   final Habit habit;
@@ -22,97 +22,7 @@ class HabitCard extends StatefulWidget {
 
 class _HabitCardState extends State<HabitCard> {
   final Set<int> _markedDays = {};
-void _showEditHabitDialog(BuildContext context) {
-  final titleController =
-      TextEditingController(text: widget.habit.title);
-  int points = widget.habit.pointsReward;
 
-  showDialog(
-    context: context,
-    builder: (_) => StatefulBuilder(
-      builder: (ctx, setDialogState) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          'Редактировать привычку',
-          style: TextStyle(color: Colors.white, fontSize: 17),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              autofocus: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Название',
-                labelStyle: const TextStyle(color: Colors.white54),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.white24),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                      color: Color(0xFF0047AB), width: 2),
-                ),
-                filled: true,
-                fillColor: const Color(0xFF2C2C2E),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text('Баллов: ',
-                    style: TextStyle(color: Colors.white70)),
-                Expanded(
-                  child: Slider(
-                    value: points.toDouble(),
-                    min: 5,
-                    max: 50,
-                    divisions: 9,
-                    activeColor: const Color(0xFF0047AB),
-                    label: '$points',
-                    onChanged: (v) =>
-                        setDialogState(() => points = v.round()),
-                  ),
-                ),
-                Text('$points \u{2B50}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена',
-                style: TextStyle(color: Colors.white54)),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (titleController.text.trim().isEmpty) return;
-              widget.habit.title = titleController.text.trim();
-              widget.habit.pointsReward = points;
-              context
-                  .read<HabitBloc>()
-                  .add(UpdateHabitEvent(widget.habit));
-              Navigator.pop(ctx);
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0047AB),
-            ),
-            child: const Text('Сохранить'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
   List<DateTime> _lastSevenDays() {
     final today = DateTime.now();
     return List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
@@ -131,30 +41,26 @@ void _showEditHabitDialog(BuildContext context) {
   }
 
   bool _isDayCompleted(DateTime date) {
-    // TODAY — только если пользователь сам нажал
     if (_isToday(date)) return widget.habit.isCompletedToday;
     return _markedDays.contains(date.day);
   }
 
-  void _onDayTap(BuildContext context, DateTime date) {
+  void _onDayTap(DateTime date) {
     if (_isToday(date)) {
-      // Сегодня — показываем диалог подтверждения
       if (!widget.habit.isCompletedToday) {
-        _showConfirmDialog(context, date, isToday: true);
+        _showConfirmDialog(date, isToday: true);
       }
       return;
     }
-    // Прошлые дни
     if (!_markedDays.contains(date.day)) {
-      _showConfirmDialog(context, date, isToday: false);
+      _showConfirmDialog(date, isToday: false);
     }
   }
 
-  void _showConfirmDialog(BuildContext context, DateTime date,
-      {required bool isToday}) {
+  void _showConfirmDialog(DateTime date, {required bool isToday}) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFF1C1C1E),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -164,9 +70,7 @@ void _showEditHabitDialog(BuildContext context) {
             const Text('\u{1F4C5}', style: TextStyle(fontSize: 20)),
             const SizedBox(width: 8),
             Text(
-              isToday
-                  ? 'Сегодня'
-                  : '${date.day} ${_monthName(date.month)}',
+              isToday ? 'Сегодня' : '${date.day} ${_monthName(date.month)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -181,7 +85,7 @@ void _showEditHabitDialog(BuildContext context) {
         ),
         actions: [
           OutlinedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white54,
               side: const BorderSide(color: Colors.white24),
@@ -193,7 +97,7 @@ void _showEditHabitDialog(BuildContext context) {
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.of(dialogContext).pop();
               if (isToday) {
                 widget.onComplete();
               } else {
@@ -213,6 +117,126 @@ void _showEditHabitDialog(BuildContext context) {
     );
   }
 
+  void _showEditDialog() {
+    // Сохраняем bloc ДО открытия диалога
+    final habitBloc = context.read<HabitBloc>();
+    final titleController =
+        TextEditingController(text: widget.habit.title);
+    int points = widget.habit.pointsReward;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1C1C1E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Редактировать привычку',
+            style: TextStyle(color: Colors.white, fontSize: 17),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Название',
+                  labelStyle: const TextStyle(color: Colors.white54),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.white24),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                        color: Color(0xFF0047AB), width: 2),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFF2C2C2E),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Text(
+                    'Баллов: ',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: points.toDouble(),
+                      min: 5,
+                      max: 50,
+                      divisions: 9,
+                      activeColor: const Color(0xFF0047AB),
+                      label: '$points',
+                      onChanged: (v) =>
+                          setDialogState(() => points = v.round()),
+                    ),
+                  ),
+                  Text(
+                    '$points \u{2B50}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Отмена',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (titleController.text.trim().isEmpty) return;
+                // Используем сохранённый bloc, не context диалога
+                final updated = widget.habit
+                  ..title = titleController.text.trim()
+                  ..pointsReward = points;
+                habitBloc.add(UpdateHabitEvent(updated));
+                Navigator.of(dialogContext).pop();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF0047AB),
+              ),
+              child: const Text('Сохранить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openFullCalendar() {
+    final habitBloc = context.read<HabitBloc>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => _FullCalendarSheet(
+        habit: widget.habit,
+        markedDays: _markedDays,
+        onDayMarked: (day) => setState(() => _markedDays.add(day)),
+        onComplete: widget.onComplete,
+        habitBloc: habitBloc,
+      ),
+    );
+  }
+
   String _monthName(int month) {
     const names = [
       'янв', 'фев', 'мар', 'апр', 'май', 'июн',
@@ -226,24 +250,6 @@ void _showEditHabitDialog(BuildContext context) {
     return ((widget.habit.currentStreak / widget.habit.longestStreak) * 100)
         .round()
         .clamp(0, 100);
-  }
-
-  // Открываем полный календарь
-  void _openFullCalendar(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1C1C1E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _FullCalendarSheet(
-        habit: widget.habit,
-        markedDays: _markedDays,
-        onDayMarked: (day) => setState(() => _markedDays.add(day)),
-        onComplete: widget.onComplete,
-      ),
-    );
   }
 
   @override
@@ -282,37 +288,24 @@ void _showEditHabitDialog(BuildContext context) {
                     ),
                   ),
                 ),
-                // Кнопка открытия календаря
                 IconButton(
                   icon: const Icon(Icons.calendar_month_outlined,
                       color: Color(0xFF4DA6FF), size: 20),
-                  tooltip: 'Открыть календарь',
-                  onPressed: () => _openFullCalendar(context),
+                  onPressed: _openFullCalendar,
+                  tooltip: 'Календарь',
                 ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert,
                       color: Colors.white54, size: 20),
                   color: const Color(0xFF2C2C2E),
                   onSelected: (v) {
+                    if (v == 'edit') _showEditDialog();
                     if (v == 'delete') widget.onDelete();
-                    if (v == 'edit') _showEditHabitDialog(context);
                     if (v == 'complete' && !isDone) {
-                      _showConfirmDialog(context, DateTime.now(),
-                          isToday: true);
+                      _showConfirmDialog(DateTime.now(), isToday: true);
                     }
                   },
                   itemBuilder: (_) => [
-                   const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                  children: [
-                  Icon(Icons.edit_outlined, color: Colors.blue),
-                 SizedBox(width: 8),
-                 Text('Редактировать',
-                 style: TextStyle(color: Colors.white)),
-                         ],
-                     ),
-                  ),
                     if (!isDone)
                       const PopupMenuItem(
                         value: 'complete',
@@ -326,6 +319,17 @@ void _showEditHabitDialog(BuildContext context) {
                           ],
                         ),
                       ),
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Text('Редактировать',
+                              style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
                     const PopupMenuItem(
                       value: 'delete',
                       child: Row(
@@ -382,10 +386,10 @@ void _showEditHabitDialog(BuildContext context) {
 
           Divider(height: 1, color: Colors.white.withOpacity(0.08)),
 
-          // 7 дней — кликабельные
+          // 7 дней
           Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: days.map((day) {
@@ -393,7 +397,7 @@ void _showEditHabitDialog(BuildContext context) {
                 final completed = _isDayCompleted(day);
 
                 return GestureDetector(
-                  onTap: () => _onDayTap(context, day),
+                  onTap: () => _onDayTap(day),
                   child: Column(
                     children: [
                       AnimatedContainer(
@@ -457,19 +461,21 @@ void _showEditHabitDialog(BuildContext context) {
 }
 
 // ─────────────────────────────────────────
-// Полный календарь — Bottom Sheet
+// Полный календарь
 // ─────────────────────────────────────────
 class _FullCalendarSheet extends StatefulWidget {
   final Habit habit;
   final Set<int> markedDays;
   final Function(int) onDayMarked;
   final VoidCallback onComplete;
+  final HabitBloc habitBloc;
 
   const _FullCalendarSheet({
     required this.habit,
     required this.markedDays,
     required this.onDayMarked,
     required this.onComplete,
+    required this.habitBloc,
   });
 
   @override
@@ -488,16 +494,16 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
   }
 
   List<DateTime?> _buildCalendarDays() {
-    final firstDay = DateTime(_currentMonth.year, _currentMonth.month, 1);
-    final lastDay = DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
-    final startWeekday = firstDay.weekday; // 1=пн, 7=вс
+    final firstDay =
+        DateTime(_currentMonth.year, _currentMonth.month, 1);
+    final lastDay =
+        DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
+    final startWeekday = firstDay.weekday;
 
     final days = <DateTime?>[];
-    // Пустые ячейки до первого дня
     for (int i = 1; i < startWeekday; i++) {
       days.add(null);
     }
-    // Дни месяца
     for (int i = 1; i <= lastDay.day; i++) {
       days.add(DateTime(_currentMonth.year, _currentMonth.month, i));
     }
@@ -525,18 +531,17 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
   }
 
   void _onDayTap(DateTime date) {
-    if (_isFuture(date)) return;
-    if (_isCompleted(date)) return;
+    if (_isFuture(date) || _isCompleted(date)) return;
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFF1C1C1E),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
         title: Text(
-          '${date.day} ${_monthName(date.month)}',
+          _isToday(date) ? 'Сегодня' : '${date.day} ${_monthName(date.month)}',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
@@ -548,7 +553,7 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
         ),
         actions: [
           OutlinedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white54,
               side: const BorderSide(color: Colors.white24),
@@ -560,7 +565,7 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.of(dialogContext).pop();
               if (_isToday(date)) {
                 widget.onComplete();
               } else {
@@ -590,14 +595,6 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
     return names[month - 1];
   }
 
-  String _shortMonthName(int month) {
-    const names = [
-      'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-    ];
-    return names[month - 1];
-  }
-
   @override
   Widget build(BuildContext context) {
     final calDays = _buildCalendarDays();
@@ -610,7 +607,6 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
       expand: false,
       builder: (_, controller) => Column(
         children: [
-          // Handle
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 40,
@@ -622,7 +618,6 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
           ),
           const SizedBox(height: 16),
 
-          // Заголовок
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -643,9 +638,8 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
               ],
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
 
-          // Streak info
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -670,9 +664,9 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Навигация по месяцу
+          // Навигация месяц
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -710,7 +704,7 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
             ),
           ),
 
-          // Дни недели заголовки
+          // Заголовки дней
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -734,7 +728,7 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
           ),
           const SizedBox(height: 8),
 
-          // Сетка дней
+          // Сетка
           Expanded(
             child: SingleChildScrollView(
               controller: controller,
@@ -809,15 +803,20 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _LegendItem(
-                    color: const Color(0xFF0047AB), label: 'Выполнено'),
+                  color: const Color(0xFF0047AB),
+                  label: 'Выполнено',
+                ),
                 const SizedBox(width: 16),
                 _LegendItem(
-                    color: const Color(0xFF0047AB).withOpacity(0.2),
-                    label: 'Сегодня',
-                    isBorder: true),
+                  color: const Color(0xFF0047AB).withOpacity(0.2),
+                  label: 'Сегодня',
+                  isBorder: true,
+                ),
                 const SizedBox(width: 16),
                 _LegendItem(
-                    color: Colors.white12, label: 'Будущее'),
+                  color: Colors.white12,
+                  label: 'Будущее',
+                ),
               ],
             ),
           ),
@@ -892,7 +891,8 @@ class _LegendItem extends StatelessWidget {
             shape: BoxShape.circle,
             color: color,
             border: isBorder
-                ? Border.all(color: const Color(0xFF0047AB), width: 1.5)
+                ? Border.all(
+                    color: const Color(0xFF0047AB), width: 1.5)
                 : null,
           ),
         ),
