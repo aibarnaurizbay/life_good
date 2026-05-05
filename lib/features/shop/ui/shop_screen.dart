@@ -47,31 +47,31 @@ class ShopScreen extends StatelessWidget {
       ),
       body: BlocConsumer<ShopBloc, ShopState>(
         listener: (context, state) {
-          if (state is ShopPurchaseSuccess) {
-            context.read<PointsProvider>().refresh();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '${state.purchased.iconEmoji} ${state.purchased.title} куплено! -${state.pointsSpent} \u{2B50}',
-                ),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            );
-          } else if (state is ShopPurchaseFailed) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.reason),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            );
-          }
-        },
+  if (state is ShopPurchaseSuccess) {
+    context.read<PointsProvider>().refresh(); // ← это уже есть
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${state.purchased.iconEmoji} ${state.purchased.title} куплено! -${state.pointsSpent} \u{2B50}',
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  } else if (state is ShopPurchaseFailed) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(state.reason),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+},
         builder: (context, state) {
           if (state is ShopLoading) {
             return const Center(child: CircularProgressIndicator());
@@ -137,7 +137,7 @@ class ShopScreen extends StatelessWidget {
 // ─────────────────────────────────────────
 // Карточка награды — отдельный StatefulWidget
 // ─────────────────────────────────────────
-class _RewardCard extends StatelessWidget {
+class _RewardCard extends StatefulWidget {
   final Reward reward;
   final int userPoints;
 
@@ -146,12 +146,61 @@ class _RewardCard extends StatelessWidget {
     required this.userPoints,
   });
 
+  @override
+  State<_RewardCard> createState() => _RewardCardState();
+}
+
+class _RewardCardState extends State<_RewardCard> {
+  int _secondsLeft = 0;
+  bool _isCooldown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCooldown();
+  }
+
+  @override
+  void didUpdateWidget(_RewardCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _checkCooldown();
+  }
+
+  void _checkCooldown() {
+    if (widget.reward.isPurchased && widget.reward.purchasedAt != null) {
+      final diff =
+          DateTime.now().difference(widget.reward.purchasedAt!);
+      final left = 3 - diff.inSeconds;
+      if (left > 0) {
+        setState(() {
+          _isCooldown = true;
+          _secondsLeft = left;
+        });
+        _startTimer();
+      } else {
+        setState(() => _isCooldown = false);
+      }
+    } else {
+      setState(() => _isCooldown = false);
+    }
+  }
+
+  void _startTimer() {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      setState(() => _secondsLeft--);
+      if (_secondsLeft > 0) {
+        _startTimer();
+      } else {
+        setState(() => _isCooldown = false);
+      }
+    });
+  }
+
   Future<void> _onTap(BuildContext context) async {
-    if (reward.isPurchased) return;
+    if (_isCooldown) return;
 
-    final canAfford = userPoints >= reward.cost;
-
-    // Сохраняем bloc ДО диалога
+    final canAfford = widget.userPoints >= widget.reward.cost;
     final shopBloc = context.read<ShopBloc>();
 
     final confirmed = await showDialog<bool>(
@@ -164,13 +213,11 @@ class _RewardCard extends StatelessWidget {
         ),
         title: Column(
           children: [
-            Text(
-              reward.iconEmoji,
-              style: const TextStyle(fontSize: 40),
-            ),
+            Text(widget.reward.iconEmoji,
+                style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 8),
             Text(
-              reward.title,
+              widget.reward.title,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -183,9 +230,9 @@ class _RewardCard extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (reward.description != null)
+            if (widget.reward.description != null)
               Text(
-                reward.description!,
+                widget.reward.description!,
                 style: const TextStyle(
                     color: Colors.white70, fontSize: 14),
                 textAlign: TextAlign.center,
@@ -201,7 +248,7 @@ class _RewardCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Стоимость: ${reward.cost} \u{2B50}',
+                'Стоимость: ${widget.reward.cost} \u{2B50}',
                 style: TextStyle(
                   color: canAfford
                       ? const Color(0xFF4DA6FF)
@@ -214,7 +261,7 @@ class _RewardCard extends StatelessWidget {
             if (!canAfford) ...[
               const SizedBox(height: 8),
               Text(
-                'Не хватает ${reward.cost - userPoints} \u{2B50}',
+                'Не хватает ${widget.reward.cost - widget.userPoints} \u{2B50}',
                 style: const TextStyle(
                     color: Colors.red, fontSize: 13),
               ),
@@ -228,9 +275,8 @@ class _RewardCard extends StatelessWidget {
                 style: TextStyle(color: Colors.white54)),
           ),
           FilledButton(
-            onPressed: canAfford
-                ? () => Navigator.of(ctx).pop(true)
-                : null,
+            onPressed:
+                canAfford ? () => Navigator.of(ctx).pop(true) : null,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF0047AB),
             ),
@@ -241,14 +287,11 @@ class _RewardCard extends StatelessWidget {
     );
 
     if (confirmed != true) return;
-
-    // Используем сохранённый bloc
-    shopBloc.add(PurchaseRewardEvent(reward.id));
+    shopBloc.add(PurchaseRewardEvent(widget.reward.id));
   }
 
   Future<void> _onDelete(BuildContext context) async {
     final shopBloc = context.read<ShopBloc>();
-
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
@@ -257,12 +300,10 @@ class _RewardCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Text(
-          'Удалить награду?',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Удалить награду?',
+            style: TextStyle(color: Colors.white)),
         content: Text(
-          '${reward.iconEmoji} ${reward.title} будет удалена',
+          '${widget.reward.iconEmoji} ${widget.reward.title} будет удалена',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -273,23 +314,20 @@ class _RewardCard extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style:
-                FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+                backgroundColor: Colors.red),
             child: const Text('Удалить'),
           ),
         ],
       ),
     );
-
     if (confirmed != true) return;
-
-    shopBloc.add(DeleteRewardEvent(reward.id));
+    shopBloc.add(DeleteRewardEvent(widget.reward.id));
   }
 
   @override
   Widget build(BuildContext context) {
-    final isPurchased = reward.isPurchased;
-    final canAfford = userPoints >= reward.cost;
+    final canAfford = widget.userPoints >= widget.reward.cost;
 
     return Card(
       color: const Color(0xFF1C1C1E),
@@ -297,7 +335,7 @@ class _RewardCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
-        onTap: isPurchased ? null : () => _onTap(context),
+        onTap: _isCooldown ? null : () => _onTap(context),
         borderRadius: BorderRadius.circular(16),
         child: Stack(
           children: [
@@ -326,13 +364,11 @@ class _RewardCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    reward.iconEmoji,
-                    style: const TextStyle(fontSize: 38),
-                  ),
+                  Text(widget.reward.iconEmoji,
+                      style: const TextStyle(fontSize: 38)),
                   const SizedBox(height: 8),
                   Text(
-                    reward.title,
+                    widget.reward.title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
@@ -343,18 +379,34 @@ class _RewardCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  if (isPurchased)
+
+                  // Статус кнопки
+                  if (_isCooldown)
+                    // Таймер обратного отсчёта
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.15),
+                        color: Colors.orange.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: Colors.orange.withOpacity(0.4)),
                       ),
-                      child: const Text(
-                        '\u{2713} Куплено',
-                        style: TextStyle(
-                            color: Colors.green, fontSize: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.timer,
+                              color: Colors.orange, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$_secondsLeft сек',
+                            style: const TextStyle(
+                              color: Colors.orange,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     )
                   else
@@ -368,7 +420,7 @@ class _RewardCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '${reward.cost} \u{2B50}',
+                        '${widget.reward.cost} \u{2B50}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,

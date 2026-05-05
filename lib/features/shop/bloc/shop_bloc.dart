@@ -1,5 +1,4 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../shared/isar_service.dart';
 import '../data/reward_repository.dart';
 import '../../profile/data/user_repository.dart';
 import 'shop_event.dart';
@@ -16,7 +15,8 @@ class ShopBloc extends Bloc<ShopEvent, ShopState> {
     on<DeleteRewardEvent>(_onDelete);
   }
 
-  Future<void> _onLoad(LoadRewardsEvent event, Emitter<ShopState> emit) async {
+  Future<void> _onLoad(
+      LoadRewardsEvent event, Emitter<ShopState> emit) async {
     emit(ShopLoading());
     try {
       final rewards = await _rewardRepo.getAll();
@@ -26,7 +26,8 @@ class ShopBloc extends Bloc<ShopEvent, ShopState> {
     }
   }
 
-  Future<void> _onAdd(AddRewardEvent event, Emitter<ShopState> emit) async {
+  Future<void> _onAdd(
+      AddRewardEvent event, Emitter<ShopState> emit) async {
     try {
       await _rewardRepo.save(event.reward);
       final rewards = await _rewardRepo.getAll();
@@ -39,52 +40,72 @@ class ShopBloc extends Bloc<ShopEvent, ShopState> {
   Future<void> _onPurchase(
       PurchaseRewardEvent event, Emitter<ShopState> emit) async {
     try {
-      // Атомарная транзакция: проверка + списание + смена статуса
-      await IsarService.instance.writeTxn(() async {
-        final reward = await _rewardRepo.getById(event.rewardId);
-        final user = await _userRepo.getProfile();
-
-        if (reward == null) throw Exception('Награда не найдена');
-        if (reward.isPurchased) throw Exception('already_owned');
-        if (user.totalPoints < reward.cost) throw Exception('insufficient_funds');
-
-        user.totalPoints -= reward.cost;
-        reward.isPurchased = true;
-        reward.purchasedAt = DateTime.now();
-
-        await _rewardRepo.save(reward);
-        await _userRepo.save(user);
-      });
-
+      // 1. Получаем награду
       final reward = await _rewardRepo.getById(event.rewardId);
-      final rewards = await _rewardRepo.getAll();
+      if (reward == null) {
+        final rewards = await _rewardRepo.getAll();
+        emit(ShopPurchaseFailed(
+            rewards: rewards, reason: 'Награда не найдена'));
+        return;
+      }
 
+      // 2. Проверяем — заблокирована ли (куплена менее 3 сек назад)
+      if (reward.isPurchased && reward.purchasedAt != null) {
+        final diff = DateTime.now().difference(reward.purchasedAt!);
+        if (diff.inSeconds < 3) {
+          final rewards = await _rewardRepo.getAll();
+          emit(ShopPurchaseFailed(
+              rewards: rewards,
+              reason:
+                  'Подождите ${3 - diff.inSeconds} сек...'));
+          return;
+        }
+      }
+
+      // 3. Пытаемся списать баллы
+      final success = await _userRepo.spendPoints(reward.cost);
+      if (!success) {
+        final rewards = await _rewardRepo.getAll();
+        emit(ShopPurchaseFailed(
+            rewards: rewards, reason: 'Недостаточно баллов'));
+        return;
+      }
+
+      // 4. Отмечаем как купленную
+      reward.isPurchased = true;
+      reward.purchasedAt = DateTime.now();
+      await _rewardRepo.save(reward);
+
+      final rewards = await _rewardRepo.getAll();
       emit(ShopPurchaseSuccess(
         rewards: rewards,
-        purchased: reward!,
+        purchased: reward,
         pointsSpent: reward.cost,
       ));
-    } on Exception catch (e) {
-      final rewards = await _rewardRepo.getAll();
-      final msg = e.toString();
 
-      if (msg.contains('insufficient_funds')) {
-        emit(ShopPurchaseFailed(
-          rewards: rewards,
-          reason: 'Недостаточно баллов',
-        ));
-      } else if (msg.contains('already_owned')) {
-        emit(ShopPurchaseFailed(
-          rewards: rewards,
-          reason: 'Награда уже куплена',
-        ));
-      } else {
-        emit(ShopError('Ошибка покупки: $e'));
-      }
+      // 5. Через 3 секунды сбрасываем статус — можно купить снова
+      await Future.delayed(const Duration(seconds: 3));
+
+      if (isClosed) return;
+
+      final rewardAfter = await _rewardRepo.getById(event.rewardId);
+      if (rewardAfter == null) return;
+
+      rewardAfter.isPurchased = false;
+      rewardAfter.purchasedAt = null;
+      await _rewardRepo.save(rewardAfter);
+
+      final updatedRewards = await _rewardRepo.getAll();
+      emit(ShopLoaded(updatedRewards));
+    } catch (e) {
+      final rewards = await _rewardRepo.getAll();
+      emit(ShopPurchaseFailed(
+          rewards: rewards, reason: 'Ошибка покупки: $e'));
     }
   }
 
-  Future<void> _onDelete(DeleteRewardEvent event, Emitter<ShopState> emit) async {
+  Future<void> _onDelete(
+      DeleteRewardEvent event, Emitter<ShopState> emit) async {
     try {
       await _rewardRepo.delete(event.id);
       final rewards = await _rewardRepo.getAll();
