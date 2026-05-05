@@ -4,6 +4,7 @@ import '../../data/habit_model.dart';
 class HabitCard extends StatefulWidget {
   final Habit habit;
   final VoidCallback onComplete;
+  final VoidCallback onCancel;   // ← добавь
   final VoidCallback onDelete;
   final Function(String title, int points) onEdit;
 
@@ -11,6 +12,7 @@ class HabitCard extends StatefulWidget {
     super.key,
     required this.habit,
     required this.onComplete,
+    required this.onCancel,      // ← добавь
     required this.onDelete,
     required this.onEdit,
   });
@@ -61,63 +63,123 @@ class _HabitCardState extends State<HabitCard> {
 
   // Диалог подтверждения — без BLoC внутри
   Future<bool> _askConfirm(String title) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: Text(
-          'Привычка "${widget.habit.title}" выполнена?',
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Нет',
-                style: TextStyle(color: Colors.white54)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0047AB),
-            ),
-            child: const Text('Да'),
-          ),
-        ],
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-    );
-    return result ?? false;
-  }
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      content: Text(
+        'Привычка "${widget.habit.title}" выполнена?',
+        style: const TextStyle(color: Colors.white70, fontSize: 14),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Нет',
+              style: TextStyle(color: Colors.white54)),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF0047AB),
+          ),
+          child: const Text('Да'),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
+}
+
+Future<bool> _askCancel(String title) async {
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      content: Text(
+        'Отменить выполнение привычки "${widget.habit.title}"?',
+        style: const TextStyle(color: Colors.white70, fontSize: 14),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Нет',
+              style: TextStyle(color: Colors.white54)),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
+          child: const Text('Отменить'),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
+}
 
   void _onDayTap(DateTime date) async {
-    final isToday = _isToday(date);
+  final isToday = _isToday(date);
+  final label = isToday
+      ? 'Сегодня'
+      : '${date.day} ${_monthName(date.month)}';
 
-    if (isToday && widget.habit.isCompletedToday) return;
-    if (!isToday && _markedDays.contains(date.day)) return;
+  if (isToday) {
+    if (widget.habit.isCompletedToday) {
+      // Уже выполнено — предлагаем отменить
+      final cancel = await _askCancel(label);
+      if (!cancel) return;
+      if (!mounted) return;
+      widget.onCancel(); // отменяем выполнение
+    } else {
+      // Не выполнено — подтверждаем
+      final confirmed = await _askConfirm(label);
+      if (!confirmed) return;
+      if (!mounted) return;
+      widget.onComplete();
+    }
+    return;
+  }
 
-    final label = isToday ? 'Сегодня' : '${date.day} ${_monthName(date.month)}';
+  // Прошлые дни
+  if (_markedDays.contains(date.day)) {
+    // Уже отмечен — предлагаем отменить
+    final cancel = await _askCancel(label);
+    if (!cancel) return;
+    if (!mounted) return;
+    setState(() => _markedDays.remove(date.day));
+  } else {
+    // Не отмечен — подтверждаем
     final confirmed = await _askConfirm(label);
-
     if (!confirmed) return;
     if (!mounted) return;
-
-    if (isToday) {
-      widget.onComplete();
-    } else {
-      setState(() => _markedDays.add(date.day));
-    }
+    setState(() => _markedDays.add(date.day));
   }
+}
 
   void _onEditTap() async {
     final titleController =

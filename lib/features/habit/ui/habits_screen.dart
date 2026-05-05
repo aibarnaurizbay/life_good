@@ -273,6 +273,9 @@ class _HabitsTab extends StatelessWidget {
               onComplete: () => context
                   .read<HabitBloc>()
                   .add(CompleteHabitEvent(habit.id)),
+              onCancel: () => context       // ← добавь
+                  .read<HabitBloc>()
+                  .add(CancelHabitEvent(habit.id)),
               onDelete: () => context
                   .read<HabitBloc>()
                   .add(DeleteHabitEvent(habit.id)),

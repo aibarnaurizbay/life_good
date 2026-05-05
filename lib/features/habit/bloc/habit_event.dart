@@ -19,6 +19,11 @@ class CompleteHabitEvent extends HabitEvent {
   CompleteHabitEvent(this.id);
 }
 
+class CancelHabitEvent extends HabitEvent {
+  final int id;
+  CancelHabitEvent(this.id);
+}
+
 class DeleteHabitEvent extends HabitEvent {
   final int id;
   DeleteHabitEvent(this.id);
