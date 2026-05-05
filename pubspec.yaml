@@ -1,7 +1,7 @@
-name: productivity_tracker
-description: Personal productivity tracker with gamification
+name: life_good
+description: Трекер личной эффективности
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
   flutter_bloc: ^8.1.5
   provider: ^6.1.2
   isar: ^3.1.0
@@ -27,6 +26,17 @@ dev_dependencies:
   isar_generator: ^3.1.0
   build_runner: ^2.4.9
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0047AB"
+  adaptive_icon_foreground: "assets/app_icon.png"
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/
