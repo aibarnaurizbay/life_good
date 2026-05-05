@@ -276,6 +276,11 @@ class _HabitsTab extends StatelessWidget {
               onDelete: () => context
                   .read<HabitBloc>()
                   .add(DeleteHabitEvent(habit.id)),
+                   onEdit: (title, points) {
+              habit.title = title;
+             habit.pointsReward = points;
+             context.read<HabitBloc>().add(UpdateHabitEvent(habit));
+                   }
             );
           },
         );

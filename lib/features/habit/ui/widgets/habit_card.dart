@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../bloc/habit_bloc.dart';
-import '../../bloc/habit_event.dart';
 import '../../data/habit_model.dart';
 
 class HabitCard extends StatefulWidget {
   final Habit habit;
   final VoidCallback onComplete;
   final VoidCallback onDelete;
+  final Function(String title, int points) onEdit;
 
   const HabitCard({
     super.key,
     required this.habit,
     required this.onComplete,
     required this.onDelete,
+    required this.onEdit,
   });
 
   @override
@@ -45,89 +44,91 @@ class _HabitCardState extends State<HabitCard> {
     return _markedDays.contains(date.day);
   }
 
-  void _onDayTap(DateTime date) {
-    if (_isToday(date)) {
-      if (!widget.habit.isCompletedToday) {
-        _showConfirmDialog(date, isToday: true);
-      }
-      return;
-    }
-    if (!_markedDays.contains(date.day)) {
-      _showConfirmDialog(date, isToday: false);
-    }
+  String _monthName(int month) {
+    const names = [
+      'янв','фев','мар','апр','май','июн',
+      'июл','авг','сен','окт','ноя','дек',
+    ];
+    return names[month - 1];
   }
 
-  void _showConfirmDialog(DateTime date, {required bool isToday}) {
-    showDialog(
+  int _overallPercent() {
+    if (widget.habit.longestStreak == 0) return 0;
+    return ((widget.habit.currentStreak / widget.habit.longestStreak) * 100)
+        .round()
+        .clamp(0, 100);
+  }
+
+  // Диалог подтверждения — без BLoC внутри
+  Future<bool> _askConfirm(String title) async {
+    final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1C1C1E),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: Row(
-          children: [
-            const Text('\u{1F4C5}', style: TextStyle(fontSize: 20)),
-            const SizedBox(width: 8),
-            Text(
-              isToday ? 'Сегодня' : '${date.day} ${_monthName(date.month)}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         content: Text(
           'Привычка "${widget.habit.title}" выполнена?',
-          style: const TextStyle(color: Colors.white70, fontSize: 15),
+          style: const TextStyle(color: Colors.white70, fontSize: 14),
         ),
         actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white54,
-              side: const BorderSide(color: Colors.white24),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Нет'),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Нет',
+                style: TextStyle(color: Colors.white54)),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              if (isToday) {
-                widget.onComplete();
-              } else {
-                setState(() => _markedDays.add(date.day));
-              }
-            },
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF0047AB),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
             ),
             child: const Text('Да'),
           ),
         ],
       ),
     );
+    return result ?? false;
   }
 
-  void _showEditDialog() {
-    // Сохраняем bloc ДО открытия диалога
-    final habitBloc = context.read<HabitBloc>();
+  void _onDayTap(DateTime date) async {
+    final isToday = _isToday(date);
+
+    if (isToday && widget.habit.isCompletedToday) return;
+    if (!isToday && _markedDays.contains(date.day)) return;
+
+    final label = isToday ? 'Сегодня' : '${date.day} ${_monthName(date.month)}';
+    final confirmed = await _askConfirm(label);
+
+    if (!confirmed) return;
+    if (!mounted) return;
+
+    if (isToday) {
+      widget.onComplete();
+    } else {
+      setState(() => _markedDays.add(date.day));
+    }
+  }
+
+  void _onEditTap() async {
     final titleController =
         TextEditingController(text: widget.habit.title);
     int points = widget.habit.pointsReward;
 
-    showDialog(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
+      barrierDismissible: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
           backgroundColor: const Color(0xFF1C1C1E),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -162,10 +163,8 @@ class _HabitCardState extends State<HabitCard> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  const Text(
-                    'Баллов: ',
-                    style: TextStyle(color: Colors.white70),
-                  ),
+                  const Text('Баллов: ',
+                      style: TextStyle(color: Colors.white70)),
                   Expanded(
                     child: Slider(
                       value: points.toDouble(),
@@ -174,38 +173,30 @@ class _HabitCardState extends State<HabitCard> {
                       divisions: 9,
                       activeColor: const Color(0xFF0047AB),
                       label: '$points',
-                      onChanged: (v) =>
-                          setDialogState(() => points = v.round()),
+                      onChanged: (v) => setS(() => points = v.round()),
                     ),
                   ),
-                  Text(
-                    '$points \u{2B50}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text('$points \u{2B50}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(
-                'Отмена',
-                style: TextStyle(color: Colors.white54),
-              ),
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Отмена',
+                  style: TextStyle(color: Colors.white54)),
             ),
             FilledButton(
               onPressed: () {
                 if (titleController.text.trim().isEmpty) return;
-                // Используем сохранённый bloc, не context диалога
-                final updated = widget.habit
-                  ..title = titleController.text.trim()
-                  ..pointsReward = points;
-                habitBloc.add(UpdateHabitEvent(updated));
-                Navigator.of(dialogContext).pop();
+                Navigator.of(ctx).pop({
+                  'title': titleController.text.trim(),
+                  'points': points,
+                });
               },
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF0047AB),
@@ -216,10 +207,14 @@ class _HabitCardState extends State<HabitCard> {
         ),
       ),
     );
+
+    if (!mounted) return;
+    if (result == null) return;
+
+    widget.onEdit(result['title'] as String, result['points'] as int);
   }
 
-  void _openFullCalendar() {
-    final habitBloc = context.read<HabitBloc>();
+  void _onCalendarTap() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -227,29 +222,15 @@ class _HabitCardState extends State<HabitCard> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (sheetContext) => _FullCalendarSheet(
+      builder: (sheetCtx) => _FullCalendarSheet(
         habit: widget.habit,
-        markedDays: _markedDays,
-        onDayMarked: (day) => setState(() => _markedDays.add(day)),
-        onComplete: widget.onComplete,
-        habitBloc: habitBloc,
+        markedDays: Set.from(_markedDays),
+        onDayMarked: (day) {
+          if (mounted) setState(() => _markedDays.add(day));
+        },
+        onTodayComplete: widget.onComplete,
       ),
     );
-  }
-
-  String _monthName(int month) {
-    const names = [
-      'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-    ];
-    return names[month - 1];
-  }
-
-  int _overallPercent() {
-    if (widget.habit.longestStreak == 0) return 0;
-    return ((widget.habit.currentStreak / widget.habit.longestStreak) * 100)
-        .round()
-        .clamp(0, 100);
   }
 
   @override
@@ -273,9 +254,9 @@ class _HabitCardState extends State<HabitCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Заголовок
+          // Заголовок + кнопки
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+            padding: const EdgeInsets.fromLTRB(16, 14, 4, 0),
             child: Row(
               children: [
                 Expanded(
@@ -291,55 +272,56 @@ class _HabitCardState extends State<HabitCard> {
                 IconButton(
                   icon: const Icon(Icons.calendar_month_outlined,
                       color: Color(0xFF4DA6FF), size: 20),
-                  onPressed: _openFullCalendar,
-                  tooltip: 'Календарь',
+                  onPressed: _onCalendarTap,
                 ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert,
                       color: Colors.white54, size: 20),
                   color: const Color(0xFF2C2C2E),
                   onSelected: (v) {
-                    if (v == 'edit') _showEditDialog();
-                    if (v == 'delete') widget.onDelete();
-                    if (v == 'complete' && !isDone) {
-                      _showConfirmDialog(DateTime.now(), isToday: true);
+                    switch (v) {
+                      case 'complete':
+                        if (!isDone) _onDayTap(DateTime.now());
+                        break;
+                      case 'edit':
+                        _onEditTap();
+                        break;
+                      case 'delete':
+                        widget.onDelete();
+                        break;
                     }
                   },
                   itemBuilder: (_) => [
                     if (!isDone)
                       const PopupMenuItem(
                         value: 'complete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.check_circle_outline,
-                                color: Colors.green),
-                            SizedBox(width: 8),
-                            Text('Выполнено',
-                                style: TextStyle(color: Colors.white)),
-                          ],
-                        ),
+                        child: Row(children: [
+                          Icon(Icons.check_circle_outline,
+                              color: Colors.green, size: 18),
+                          SizedBox(width: 8),
+                          Text('Выполнено',
+                              style: TextStyle(color: Colors.white)),
+                        ]),
                       ),
                     const PopupMenuItem(
                       value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, color: Colors.blue),
-                          SizedBox(width: 8),
-                          Text('Редактировать',
-                              style: TextStyle(color: Colors.white)),
-                        ],
-                      ),
+                      child: Row(children: [
+                        Icon(Icons.edit_outlined,
+                            color: Colors.blue, size: 18),
+                        SizedBox(width: 8),
+                        Text('Редактировать',
+                            style: TextStyle(color: Colors.white)),
+                      ]),
                     ),
                     const PopupMenuItem(
                       value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Удалить',
-                              style: TextStyle(color: Colors.white)),
-                        ],
-                      ),
+                      child: Row(children: [
+                        Icon(Icons.delete_outline,
+                            color: Colors.red, size: 18),
+                        SizedBox(width: 8),
+                        Text('Удалить',
+                            style: TextStyle(color: Colors.white)),
+                      ]),
                     ),
                   ],
                 ),
@@ -347,7 +329,7 @@ class _HabitCardState extends State<HabitCard> {
             ),
           ),
 
-          // Streak / Overall / баллы
+          // Streak info
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
             child: Row(
@@ -366,19 +348,17 @@ class _HabitCardState extends State<HabitCard> {
                 Text(
                   'Overall: ${_overallPercent()}%',
                   style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.white54,
-                    fontWeight: FontWeight.w500,
-                  ),
+                      fontSize: 13,
+                      color: Colors.white54,
+                      fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   '+${widget.habit.pointsReward}\u{2B50}',
                   style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF4DA6FF),
-                    fontWeight: FontWeight.w600,
-                  ),
+                      fontSize: 13,
+                      color: Color(0xFF4DA6FF),
+                      fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -388,14 +368,13 @@ class _HabitCardState extends State<HabitCard> {
 
           // 7 дней
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 14),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: days.map((day) {
                 final isToday = _isToday(day);
                 final completed = _isDayCompleted(day);
-
                 return GestureDetector(
                   onTap: () => _onDayTap(day),
                   child: Column(
@@ -409,13 +388,13 @@ class _HabitCardState extends State<HabitCard> {
                           color: completed
                               ? const Color(0xFF0047AB)
                               : isToday
-                                  ? const Color(0xFF0047AB).withOpacity(0.2)
+                                  ? const Color(0xFF0047AB)
+                                      .withOpacity(0.2)
                                   : const Color(0xFF2C2C2E),
                           border: isToday && !completed
                               ? Border.all(
                                   color: const Color(0xFF0047AB),
-                                  width: 1.5,
-                                )
+                                  width: 1.5)
                               : null,
                         ),
                         child: Center(
@@ -439,14 +418,12 @@ class _HabitCardState extends State<HabitCard> {
                       if (isToday)
                         const Padding(
                           padding: EdgeInsets.only(top: 4),
-                          child: Text(
-                            'TODAY',
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF0047AB),
-                            ),
-                          ),
+                          child: Text('TODAY',
+                              style: TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0047AB),
+                              )),
                         ),
                     ],
                   ),
@@ -467,15 +444,13 @@ class _FullCalendarSheet extends StatefulWidget {
   final Habit habit;
   final Set<int> markedDays;
   final Function(int) onDayMarked;
-  final VoidCallback onComplete;
-  final HabitBloc habitBloc;
+  final VoidCallback onTodayComplete;
 
   const _FullCalendarSheet({
     required this.habit,
     required this.markedDays,
     required this.onDayMarked,
-    required this.onComplete,
-    required this.habitBloc,
+    required this.onTodayComplete,
   });
 
   @override
@@ -489,7 +464,8 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
   @override
   void initState() {
     super.initState();
-    _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+    _currentMonth =
+        DateTime(DateTime.now().year, DateTime.now().month);
     _localMarked = Set.from(widget.markedDays);
   }
 
@@ -498,101 +474,97 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
         DateTime(_currentMonth.year, _currentMonth.month, 1);
     final lastDay =
         DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
-    final startWeekday = firstDay.weekday;
-
     final days = <DateTime?>[];
-    for (int i = 1; i < startWeekday; i++) {
-      days.add(null);
-    }
+    for (int i = 1; i < firstDay.weekday; i++) days.add(null);
     for (int i = 1; i <= lastDay.day; i++) {
       days.add(DateTime(_currentMonth.year, _currentMonth.month, i));
     }
     return days;
   }
 
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
+  bool _isToday(DateTime d) {
+    final n = DateTime.now();
+    return d.year == n.year && d.month == n.month && d.day == n.day;
   }
 
-  bool _isFuture(DateTime date) {
-    final now = DateTime.now();
-    return date.isAfter(DateTime(now.year, now.month, now.day));
+  bool _isFuture(DateTime d) {
+    final n = DateTime.now();
+    return d.isAfter(DateTime(n.year, n.month, n.day));
   }
 
-  bool _isCompleted(DateTime date) {
-    if (_isToday(date)) return widget.habit.isCompletedToday;
-    if (date.month == DateTime.now().month) {
-      return _localMarked.contains(date.day);
+  bool _isCompleted(DateTime d) {
+    if (_isToday(d)) return widget.habit.isCompletedToday;
+    if (d.month == DateTime.now().month) {
+      return _localMarked.contains(d.day);
     }
     return false;
   }
 
-  void _onDayTap(DateTime date) {
+  Future<void> _onDayTap(DateTime date) async {
     if (_isFuture(date) || _isCompleted(date)) return;
 
-    showDialog(
+    final label = _isToday(date)
+        ? 'Сегодня'
+        : '${date.day} ${_monthShort(date.month)}';
+
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1C1C1E),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: Text(
-          _isToday(date) ? 'Сегодня' : '${date.day} ${_monthName(date.month)}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        title: Text(label,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600)),
         content: Text(
           'Привычка "${widget.habit.title}" выполнена?',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white54,
-              side: const BorderSide(color: Colors.white24),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Нет'),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Нет',
+                style: TextStyle(color: Colors.white54)),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              if (_isToday(date)) {
-                widget.onComplete();
-              } else {
-                setState(() => _localMarked.add(date.day));
-                widget.onDayMarked(date.day);
-              }
-            },
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0047AB),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
+                backgroundColor: const Color(0xFF0047AB)),
             child: const Text('Да'),
           ),
         ],
       ),
     );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    if (_isToday(date)) {
+      widget.onTodayComplete();
+      Navigator.of(context).pop();
+    } else {
+      setState(() => _localMarked.add(date.day));
+      widget.onDayMarked(date.day);
+    }
   }
 
-  String _monthName(int month) {
-    const names = [
-      'Январь', 'Февраль', 'Март', 'Апрель',
-      'Май', 'Июнь', 'Июль', 'Август',
-      'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+  String _monthName(int m) {
+    const n = [
+      'Январь','Февраль','Март','Апрель',
+      'Май','Июнь','Июль','Август',
+      'Сентябрь','Октябрь','Ноябрь','Декабрь'
     ];
-    return names[month - 1];
+    return n[m - 1];
+  }
+
+  String _monthShort(int m) {
+    const n = [
+      'янв','фев','мар','апр','май','июн',
+      'июл','авг','сен','окт','ноя','дек'
+    ];
+    return n[m - 1];
   }
 
   @override
@@ -607,10 +579,10 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
       expand: false,
       builder: (_, controller) => Column(
         children: [
+          // Handle
           Container(
             margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
+            width: 40, height: 4,
             decoration: BoxDecoration(
               color: Colors.white24,
               borderRadius: BorderRadius.circular(2),
@@ -620,127 +592,105 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_month,
-                    color: Color(0xFF4DA6FF), size: 22),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    widget.habit.title,
+            child: Row(children: [
+              const Icon(Icons.calendar_month,
+                  color: Color(0xFF4DA6FF), size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(widget.habit.title,
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ]),
           ),
           const SizedBox(height: 12),
 
+          // Статистика
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                _StatBadge(
-                  label: 'Серия',
-                  value: '${widget.habit.currentStreak} дней',
-                  color: Colors.orange,
-                ),
-                const SizedBox(width: 8),
-                _StatBadge(
-                  label: 'Рекорд',
-                  value: '${widget.habit.longestStreak} дней',
-                  color: const Color(0xFF4DA6FF),
-                ),
-                const SizedBox(width: 8),
-                _StatBadge(
-                  label: 'Баллов',
-                  value: '+${widget.habit.pointsReward}',
-                  color: Colors.amber,
-                ),
-              ],
-            ),
+            child: Row(children: [
+              _Badge('${widget.habit.currentStreak} дн.', 'Серия',
+                  Colors.orange),
+              const SizedBox(width: 8),
+              _Badge('${widget.habit.longestStreak} дн.', 'Рекорд',
+                  const Color(0xFF4DA6FF)),
+              const SizedBox(width: 8),
+              _Badge('+${widget.habit.pointsReward}', 'Баллов',
+                  Colors.amber),
+            ]),
           ),
           const SizedBox(height: 16),
 
-          // Навигация месяц
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left,
-                      color: Colors.white70),
-                  onPressed: () => setState(() {
-                    _currentMonth = DateTime(
-                        _currentMonth.year, _currentMonth.month - 1);
-                  }),
-                ),
-                Text(
-                  '${_monthName(_currentMonth.month)} ${_currentMonth.year}',
-                  style: const TextStyle(
+          // Навигация
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left,
+                    color: Colors.white70),
+                onPressed: () => setState(() {
+                  _currentMonth = DateTime(
+                      _currentMonth.year, _currentMonth.month - 1);
+                }),
+              ),
+              Text(
+                '${_monthName(_currentMonth.month)} ${_currentMonth.year}',
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right,
-                      color: Colors.white70),
-                  onPressed: _currentMonth.year == now.year &&
-                          _currentMonth.month == now.month
-                      ? null
-                      : () => setState(() {
-                            _currentMonth = DateTime(
-                                _currentMonth.year,
-                                _currentMonth.month + 1);
-                          }),
-                ),
-              ],
-            ),
+                    fontWeight: FontWeight.w600),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right,
+                    color: Colors.white70),
+                onPressed: _currentMonth.year == now.year &&
+                        _currentMonth.month == now.month
+                    ? null
+                    : () => setState(() {
+                          _currentMonth = DateTime(
+                              _currentMonth.year,
+                              _currentMonth.month + 1);
+                        }),
+              ),
+            ],
           ),
 
           // Заголовки дней
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+              children: ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
                   .map((d) => SizedBox(
                         width: 36,
                         child: Center(
-                          child: Text(
-                            d,
-                            style: const TextStyle(
-                              color: Colors.white38,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          child: Text(d,
+                              style: const TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600)),
                         ),
                       ))
                   .toList(),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
 
           // Сетка
           Expanded(
             child: SingleChildScrollView(
               controller: controller,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate:
                     const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 7,
-                  crossAxisSpacing: 4,
-                  mainAxisSpacing: 4,
+                  crossAxisSpacing: 2,
+                  mainAxisSpacing: 2,
                   childAspectRatio: 1,
                 ),
                 itemCount: calDays.length,
@@ -753,31 +703,34 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
                   final completed = _isCompleted(date);
 
                   return GestureDetector(
-                    onTap: isFuture ? null : () => _onDayTap(date),
+                    onTap: isFuture
+                        ? null
+                        : () => _onDayTap(date),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: completed
                             ? const Color(0xFF0047AB)
                             : isToday
-                                ? const Color(0xFF0047AB).withOpacity(0.2)
+                                ? const Color(0xFF0047AB)
+                                    .withOpacity(0.2)
                                 : Colors.transparent,
                         border: isToday && !completed
                             ? Border.all(
                                 color: const Color(0xFF0047AB),
-                                width: 1.5,
-                              )
+                                width: 1.5)
                             : null,
                       ),
                       child: Center(
                         child: completed
                             ? const Icon(Icons.check,
-                                color: Colors.white, size: 16)
+                                color: Colors.white, size: 14)
                             : Text(
                                 '${date.day}',
                                 style: TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: isToday
                                       ? FontWeight.bold
                                       : FontWeight.normal,
@@ -795,47 +748,18 @@ class _FullCalendarSheetState extends State<_FullCalendarSheet> {
               ),
             ),
           ),
-
-          // Легенда
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _LegendItem(
-                  color: const Color(0xFF0047AB),
-                  label: 'Выполнено',
-                ),
-                const SizedBox(width: 16),
-                _LegendItem(
-                  color: const Color(0xFF0047AB).withOpacity(0.2),
-                  label: 'Сегодня',
-                  isBorder: true,
-                ),
-                const SizedBox(width: 16),
-                _LegendItem(
-                  color: Colors.white12,
-                  label: 'Будущее',
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 }
 
-class _StatBadge extends StatelessWidget {
-  final String label;
+class _Badge extends StatelessWidget {
   final String value;
+  final String label;
   final Color color;
-
-  const _StatBadge({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  const _Badge(this.value, this.label, this.color);
 
   @override
   Widget build(BuildContext context) {
@@ -846,62 +770,16 @@ class _StatBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Column(
-        children: [
-          Text(
-            value,
+      child: Column(children: [
+        Text(value,
             style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            label,
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.bold)),
+        Text(label,
             style: const TextStyle(
-              color: Colors.white38,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendItem extends StatelessWidget {
-  final Color color;
-  final String label;
-  final bool isBorder;
-
-  const _LegendItem({
-    required this.color,
-    required this.label,
-    this.isBorder = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            border: isBorder
-                ? Border.all(
-                    color: const Color(0xFF0047AB), width: 1.5)
-                : null,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white38, fontSize: 11),
-        ),
-      ],
+                color: Colors.white38, fontSize: 10)),
+      ]),
     );
   }
 }
