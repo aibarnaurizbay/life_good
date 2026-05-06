@@ -32,7 +32,7 @@ class App extends StatelessWidget {
         ),
       ],
       child: MaterialApp.router(
-        title: 'Productivity Tracker',
+        title: 'Life Good',
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: ThemeMode.system,
