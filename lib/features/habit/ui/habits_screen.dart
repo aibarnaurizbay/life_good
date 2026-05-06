@@ -31,6 +31,7 @@ class _HabitsScreenState extends State<HabitsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() => setState(() {}));
   }
 
   @override
@@ -68,6 +69,7 @@ class _HabitsScreenState extends State<HabitsScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: const Color(0xFF1C1C1E),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -82,6 +84,7 @@ class _HabitsScreenState extends State<HabitsScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -94,6 +97,8 @@ class _HabitsScreenState extends State<HabitsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isHabitsTab = _tabController.index == 0;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
       appBar: AppBar(
@@ -108,30 +113,10 @@ class _HabitsScreenState extends State<HabitsScreen>
           ),
         ),
         centerTitle: true,
-        actions: [
-          TextButton(
-            onPressed: () {
-              if (_tabController.index == 0) {
-                _showAddHabit();
-              } else {
-                _showAddTask();
-              }
-            },
-            child: const Text(
-              'Add',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(80),
           child: Column(
             children: [
-              // ALL HABITS + процент
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: Row(
@@ -175,7 +160,6 @@ class _HabitsScreenState extends State<HabitsScreen>
                   ],
                 ),
               ),
-              // TabBar
               TabBar(
                 controller: _tabController,
                 indicatorColor: Colors.white,
@@ -192,10 +176,7 @@ class _HabitsScreenState extends State<HabitsScreen>
       ),
       body: Column(
         children: [
-          // Виджет баллов
           const PointsHeader(),
-
-          // Контент вкладок
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -215,6 +196,12 @@ class _HabitsScreenState extends State<HabitsScreen>
             ),
           ),
         ],
+      ),
+      // Круглая кнопка + внизу справа
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF0047AB),
+        onPressed: isHabitsTab ? _showAddHabit : _showAddTask,
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
     );
   }
@@ -256,7 +243,7 @@ class _HabitsTab extends StatelessWidget {
           return const _EmptyState(
             emoji: '\u{1F331}',
             title: 'Нет привычек на сегодня',
-            subtitle: 'Нажми Add чтобы добавить первую привычку',
+            subtitle: 'Нажми + чтобы добавить первую привычку',
           );
         }
 
@@ -264,7 +251,7 @@ class _HabitsTab extends StatelessWidget {
           ..sort((a, b) => a.isCompletedToday ? 1 : -1);
 
         return ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 80),
+          padding: const EdgeInsets.only(top: 8, bottom: 100),
           itemCount: sorted.length,
           itemBuilder: (context, index) {
             final habit = sorted[index];
@@ -273,17 +260,19 @@ class _HabitsTab extends StatelessWidget {
               onComplete: () => context
                   .read<HabitBloc>()
                   .add(CompleteHabitEvent(habit.id)),
-              onCancel: () => context       // ← добавь
+              onCancel: () => context
                   .read<HabitBloc>()
                   .add(CancelHabitEvent(habit.id)),
               onDelete: () => context
                   .read<HabitBloc>()
                   .add(DeleteHabitEvent(habit.id)),
-                   onEdit: (title, points) {
-              habit.title = title;
-             habit.pointsReward = points;
-             context.read<HabitBloc>().add(UpdateHabitEvent(habit));
-                   }
+              onEdit: (title, points) {
+                habit.title = title;
+                habit.pointsReward = points;
+                context
+                    .read<HabitBloc>()
+                    .add(UpdateHabitEvent(habit));
+              },
             );
           },
         );
@@ -323,12 +312,12 @@ class _TasksTab extends StatelessWidget {
           return const _EmptyState(
             emoji: '\u{2705}',
             title: 'Нет активных задач',
-            subtitle: 'Нажми Add чтобы добавить задачу',
+            subtitle: 'Нажми + чтобы добавить задачу',
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 80),
+          padding: const EdgeInsets.only(top: 8, bottom: 100),
           itemCount: tasks.length,
           itemBuilder: (context, index) {
             final task = tasks[index];
@@ -341,8 +330,8 @@ class _TasksTab extends StatelessWidget {
                   .read<TaskBloc>()
                   .add(DeleteTaskEvent(task.id)),
               onEdit: (updatedTask) => context
-      .read<TaskBloc>()
-      .add(UpdateTaskEvent(updatedTask)),    
+                  .read<TaskBloc>()
+                  .add(UpdateTaskEvent(updatedTask)),
             );
           },
         );
@@ -374,16 +363,14 @@ class _EmptyState extends StatelessWidget {
           Text(emoji, style: const TextStyle(fontSize: 56)),
           const SizedBox(height: 16),
           Text(title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(color: Colors.white)),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Text(
             subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white38,
-                ),
+            style: const TextStyle(color: Colors.white38, fontSize: 14),
             textAlign: TextAlign.center,
           ),
         ],

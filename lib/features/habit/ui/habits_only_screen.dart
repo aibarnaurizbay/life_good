@@ -3,17 +3,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/points_provider.dart';
 import '../../../shared/widgets/points_header.dart';
-import '../bloc/task_bloc.dart';
-import '../bloc/task_event.dart';
-import '../bloc/task_state.dart';
-import '../data/task_model.dart';
-import 'widgets/task_card.dart';
-import 'widgets/add_task_sheet.dart';
+import '../bloc/habit_bloc.dart';
+import '../bloc/habit_event.dart';
+import '../bloc/habit_state.dart';
+import '../data/habit_model.dart';
+import 'widgets/habit_card.dart';
+import 'widgets/add_habit_sheet.dart';
 
-class TasksScreen extends StatelessWidget {
-  const TasksScreen({super.key});
+class HabitsOnlyScreen extends StatelessWidget {
+  const HabitsOnlyScreen({super.key});
 
-  void _showPoints(BuildContext context, int points) {
+  void _showPoints(BuildContext context, int points,
+      {int streak = 0, bool isBonus = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -21,7 +22,9 @@ class TasksScreen extends StatelessWidget {
             const Text('\u{2B50}', style: TextStyle(fontSize: 18)),
             const SizedBox(width: 8),
             Text(
-              '+$points баллов!',
+              isBonus
+                  ? '+$points баллов! \u{1F525} Бонус $streak дней!'
+                  : '+$points баллов!',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ],
@@ -35,17 +38,17 @@ class TasksScreen extends StatelessWidget {
     );
   }
 
-  void _showAddTask(BuildContext context) {
+  void _showAddHabit(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF1C1C1E),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => AddTaskSheet(
-        onAdd: (task) =>
-            context.read<TaskBloc>().add(AddTaskEvent(task)),
+      builder: (_) => AddHabitSheet(
+        onAdd: (habit) =>
+            context.read<HabitBloc>().add(AddHabitEvent(habit)),
       ),
     );
   }
@@ -57,7 +60,7 @@ class TasksScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0047AB),
         title: const Text(
-          'Задачи',
+          'Привычки',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -73,7 +76,7 @@ class TasksScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'АКТИВНЫЕ ЗАДАЧИ',
+                  'ALL HABITS',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -81,13 +84,24 @@ class TasksScreen extends StatelessWidget {
                     letterSpacing: 1,
                   ),
                 ),
-                BlocBuilder<TaskBloc, TaskState>(
+                BlocBuilder<HabitBloc, HabitState>(
                   builder: (context, state) {
-                    List<Task> tasks = [];
-                    if (state is TaskLoaded) tasks = state.tasks;
-                    if (state is TaskCompleted) tasks = state.tasks;
+                    List<Habit> habits = [];
+                    if (state is HabitLoaded) habits = state.habits;
+                    if (state is HabitCompleted) habits = state.habits;
+                    if (habits.isEmpty) {
+                      return const Text('0%',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold));
+                    }
+                    final done =
+                        habits.where((h) => h.isCompletedToday).length;
+                    final percent =
+                        ((done / habits.length) * 100).round();
                     return Text(
-                      '${tasks.length} шт.',
+                      '$percent%',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -105,41 +119,46 @@ class TasksScreen extends StatelessWidget {
         children: [
           const PointsHeader(),
           Expanded(
-            child: BlocConsumer<TaskBloc, TaskState>(
+            child: BlocConsumer<HabitBloc, HabitState>(
               listener: (context, state) {
-                if (state is TaskCompleted) {
+                if (state is HabitCompleted) {
                   context.read<PointsProvider>().refresh();
-                  _showPoints(context, state.pointsEarned);
+                  _showPoints(
+                    context,
+                    state.pointsEarned,
+                    streak: state.streak,
+                    isBonus: state.isStreakBonus,
+                  );
                 }
               },
               builder: (context, state) {
-                if (state is TaskLoading) {
+                if (state is HabitLoading) {
                   return const Center(
                       child: CircularProgressIndicator());
                 }
 
-                List<Task> tasks = [];
-                if (state is TaskLoaded) tasks = state.tasks;
-                if (state is TaskCompleted) tasks = state.tasks;
+                List<Habit> habits = [];
+                if (state is HabitLoaded) habits = state.habits;
+                if (state is HabitCompleted) habits = state.habits;
 
-                if (tasks.isEmpty) {
+                if (habits.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('\u{2705}',
+                        const Text('\u{1F331}',
                             style: TextStyle(fontSize: 56)),
                         const SizedBox(height: 16),
                         const Text(
-                          'Нет активных задач',
+                          'Нет привычек на сегодня',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Нажми + чтобы добавить задачу',
+                        Text(
+                          'Нажми + чтобы добавить первую привычку',
                           style: TextStyle(
                               color: Colors.white38, fontSize: 14),
                         ),
@@ -148,22 +167,32 @@ class TasksScreen extends StatelessWidget {
                   );
                 }
 
+                final sorted = [...habits]
+                  ..sort((a, b) => a.isCompletedToday ? 1 : -1);
+
                 return ListView.builder(
                   padding: const EdgeInsets.only(top: 8, bottom: 100),
-                  itemCount: tasks.length,
+                  itemCount: sorted.length,
                   itemBuilder: (context, index) {
-                    final task = tasks[index];
-                    return TaskCard(
-                      task: task,
+                    final habit = sorted[index];
+                    return HabitCard(
+                      habit: habit,
                       onComplete: () => context
-                          .read<TaskBloc>()
-                          .add(CompleteTaskEvent(task.id)),
+                          .read<HabitBloc>()
+                          .add(CompleteHabitEvent(habit.id)),
+                      onCancel: () => context
+                          .read<HabitBloc>()
+                          .add(CancelHabitEvent(habit.id)),
                       onDelete: () => context
-                          .read<TaskBloc>()
-                          .add(DeleteTaskEvent(task.id)),
-                      onEdit: (updatedTask) => context
-                          .read<TaskBloc>()
-                          .add(UpdateTaskEvent(updatedTask)),
+                          .read<HabitBloc>()
+                          .add(DeleteHabitEvent(habit.id)),
+                      onEdit: (title, points) {
+                        habit.title = title;
+                        habit.pointsReward = points;
+                        context
+                            .read<HabitBloc>()
+                            .add(UpdateHabitEvent(habit));
+                      },
                     );
                   },
                 );
@@ -174,7 +203,7 @@ class TasksScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF0047AB),
-        onPressed: () => _showAddTask(context),
+        onPressed: () => _showAddHabit(context),
         child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
     );

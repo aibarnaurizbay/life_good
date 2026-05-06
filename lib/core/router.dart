@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../features/habit/ui/habits_screen.dart';
+import '../features/habit/ui/habits_only_screen.dart';
+import '../features/task/ui/tasks_screen.dart';
 import '../features/goal/ui/goals_screen.dart';
 import '../features/shop/ui/shop_screen.dart';
 import '../features/stats/ui/stats_screen.dart';
@@ -17,7 +18,12 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/',
           pageBuilder: (context, state) =>
-              const NoTransitionPage(child: HabitsScreen()),
+              const NoTransitionPage(child: HabitsOnlyScreen()),
+        ),
+        GoRoute(
+          path: '/tasks',
+          pageBuilder: (context, state) =>
+              const NoTransitionPage(child: TasksScreen()),
         ),
         GoRoute(
           path: '/goals',
@@ -50,10 +56,11 @@ class _ScaffoldWithNavBar extends StatelessWidget {
 
   int _locationToIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    if (location.startsWith('/goals')) return 1;
-    if (location.startsWith('/shop')) return 2;
-    if (location.startsWith('/stats')) return 3;
-    if (location.startsWith('/profile')) return 4;
+    if (location.startsWith('/tasks')) return 1;
+    if (location.startsWith('/goals')) return 2;
+    if (location.startsWith('/shop')) return 3;
+    if (location.startsWith('/stats')) return 4;
+    if (location.startsWith('/profile')) return 5;
     return 0;
   }
 
@@ -63,15 +70,18 @@ class _ScaffoldWithNavBar extends StatelessWidget {
         context.go('/');
         break;
       case 1:
-        context.go('/goals');
+        context.go('/tasks');
         break;
       case 2:
-        context.go('/shop');
+        context.go('/goals');
         break;
       case 3:
-        context.go('/stats');
+        context.go('/shop');
         break;
       case 4:
+        context.go('/stats');
+        break;
+      case 5:
         context.go('/profile');
         break;
     }
@@ -79,17 +89,14 @@ class _ScaffoldWithNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Перехватываем системную кнопку "Назад"
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         final location = GoRouterState.of(context).matchedLocation;
-        // Если не на главной — идём на главную
         if (location != '/') {
           context.go('/');
         } else {
-          // На главной — сворачиваем приложение вместо выхода
           SystemNavigator.pop();
         }
       },
@@ -101,9 +108,14 @@ class _ScaffoldWithNavBar extends StatelessWidget {
               _onDestinationSelected(context, index),
           destinations: const [
             NavigationDestination(
-              icon: Icon(Icons.today_outlined),
-              selectedIcon: Icon(Icons.today),
-              label: 'Сегодня',
+              icon: Icon(Icons.self_improvement_outlined),
+              selectedIcon: Icon(Icons.self_improvement),
+              label: 'Привычки',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.check_box_outlined),
+              selectedIcon: Icon(Icons.check_box),
+              label: 'Задачи',
             ),
             NavigationDestination(
               icon: Icon(Icons.flag_outlined),
